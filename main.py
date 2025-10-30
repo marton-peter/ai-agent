@@ -4,6 +4,7 @@ from functions.get_files_info import schema_get_files_info
 from functions.get_file_content import schema_get_file_content
 from functions.write_file import schema_write_file
 from functions.run_python_file import schema_run_python_file
+from functions.call_function import call_function
 from config import model_name
 from config import system_prompt
 from dotenv import load_dotenv
@@ -51,9 +52,25 @@ if verbose: # Print metadata if the verbose argument is present
     print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}\n")
     print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
 
-if len(response.function_calls) > 0: # Check for called functions and print them
+if response.function_calls and len(response.function_calls) > 0: # Check for called functions and print them
     for call in response.function_calls:
-        print(f"Calling function: {call.name}({call.args})")
+        function_call_result = call_function(call, verbose=verbose)
+
+        # parts exists and has at least one Part
+        if not getattr(function_call_result, "parts", None) or len(function_call_result.parts) == 0:
+            raise RuntimeError("call_function returned Content with no parts")
+
+        part0 = function_call_result.parts[0]
+        fr = getattr(part0, "function_response", None)
+        if fr is None:
+            raise RuntimeError("missing function_response on Content.part[0]")
+
+        resp = getattr(fr, "response", None)
+        if not resp:
+            raise RuntimeError("missing function_response.response")
+
+        if verbose:
+            print(f"-> {resp}")
 else:
     print(response.text)
 
